@@ -12,3 +12,11 @@
 amixer sset PCM,0 90%
 
 amixer cset numid=3 1
+
+## Todo
+
+Leds Fade
+
+## Mopidy
+
+ - create Spotify device account : https://www.spotify.com/fr/account/set-device-password
