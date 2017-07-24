@@ -1,5 +1,7 @@
 # Radio rpi
 
+Recycle an old radio using RaspberryPi and NodeJS
+
 ## Pinout
 
  - P1-9: LED GND
@@ -20,3 +22,4 @@ Leds Fade
 ## Mopidy
 
  - create Spotify device account : https://www.spotify.com/fr/account/set-device-password
+ - Javascript debug page : https://codesandbox.io/s/BvyE51lx

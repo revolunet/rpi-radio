@@ -1,12 +1,31 @@
 const Raspi = require("raspi-io")
-var five = require("johnny-five")
-var Mopidy = require("mopidy")
+const five = require("johnny-five")
+const Mopidy = require("mopidy")
+const fadeSteps = require("fade-steps")
 
-var board = new five.Board({
+const DEFAULT_VOLUME = 40
+const DEFAULT_LED_INTENSITY = 60
+
+const board = new five.Board({
   io: new Raspi({
     enableSoftPwm: true
   })
 })
+
+const delay = (duration = 500) => new Promise((resolve, reject) => setTimeout(resolve, duration))
+
+// generate led color transition sequence
+const fade = (led, fromColor, toColor, duration = 5000) => {
+  const WAIT_TIME = 300; // ms
+  const stepCount = Math.floor(duration / WAIT_TIME)
+  const colors = fadeSteps(fromColor.replace(/#/, ""), toColor.replace(/#/, ""), stepCount).map(c => `#${c}`)
+  return Array.from({ length: stepCount })
+    .reduce((a, c, i) => {
+      led.color(colors[i])
+      return a.then(() => delay(WAIT_TIME))
+    }, Promise.resolve())
+    .catch(console.error)
+}
 
 const startLedBlink = (led, duration = 500) => {
   let blinking = true
@@ -24,51 +43,62 @@ const startLedBlink = (led, duration = 500) => {
 }
 
 board.on("ready", function() {
-  var led = new five.Led.RGB([0, 2, 3])
-
-  led.intensity(60)
+  const led = new five.Led.RGB([0, 2, 3])
+  led.intensity(DEFAULT_LED_INTENSITY)
 
   let currentPlaylistIndex = -1
   let playlists = []
 
-  const rainbow = ["FF0000", "FF7F00", "FFFF00", "00FF00", "0000FF", "4B0082", "8F00FF"]
+  const rainbow = ["#FF7F00", "#8F00FF", "#FF0000", "#FFFF00", "#00FF00", "#0000FF"]
   let rainbowIndex = 0
+
   led.color(rainbow[rainbowIndex])
 
   const cycleColor = () => {
+    const curColor = rainbow[rainbowIndex]
     rainbowIndex = (rainbowIndex + 1) % rainbow.length
     led.color(rainbow[rainbowIndex])
+    //return fade(led, curColor, rainbow[rainbowIndex]).catch(console.error)
   }
 
   const rotaryButtonsPins = [4, 5, 6]
 
   const rotaryClick = async () => {
-    cycleColor()
+    console.log("rotaryClick")
     if (mopidy.playback) {
-      const stopBlink = startLedBlink(led)
-      playNextPlaylist().then(stopBlink).catch(stopBlink)
+      mopidy.playback.stop()
     }
+    cycleColor()
+    // .then(() => {
+        if (mopidy.playback) {
+          const stopBlink = startLedBlink(led)
+          return playNext().then(stopBlink).catch(stopBlink)
+        }
+     // })
+     // .catch(console.error)
   }
 
   const shuffleArray = arr => arr.sort(() => Math.random() - 0.5)
 
-  const playEurope1 = () => {
-    led.color("006FC8")
+  const playEurope1 = async () => {
+    const curColor = rainbow[rainbowIndex]
+    fade(led, curColor, "#006FC8").catch(console.error)
     return mopidy.library.lookup("http://e1-live-mp3-128.scdn.arkena.com/europe1.mp3").then(function(tracks) {
       mopidy.tracklist.clear()
       mopidy.tracklist.add(tracks)
       console.log(`play EUROPE 1`)
-      return mopidy.playback.play();
-    })
+      return mopidy.playback.play()
+    }).catch(console.error)
   }
 
-  const playNextPlaylist = async () => {
-    if (!playlists.length) {
-      led.color(rainbow[rainbowIndex])
-    }
+  const playNext = async () => {
+    console.log("playNext")
+    // if (!playlists.length) {
+    //   led.color(rainbow[rainbowIndex])
+    // }
 
     if (rainbowIndex % 5 === 0) {
-      return playEurope1();
+      return playEurope1()
     }
 
     // pick next spotify playlist
@@ -91,9 +121,6 @@ board.on("ready", function() {
     }, 1000)
   }
 
-
-
- http://vipicecast.yacast.net/europe1
   rotaryButtonsPins.forEach(pin => {
     var button = new five.Button({
       pin,
@@ -110,7 +137,7 @@ board.on("ready", function() {
 
   mopidy.on("state:online", function() {
     console.log("mopidy:online")
-    mopidy.mixer.setVolume(70)
+    mopidy.mixer.setVolume(DEFAULT_VOLUME)
     mopidy.playlists
       .getPlaylists()
       .then(mopidyPlaylists => (playlists = shuffleArray(mopidyPlaylists)))
